@@ -1,1 +1,3 @@
 .ipynb_checkpoints/*
+myds/*
+__pycache__
