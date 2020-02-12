@@ -2,4 +2,4 @@
 myds/*
 __pycache__
 data/local.zarr
-data/myds
+data/local.tiledb
