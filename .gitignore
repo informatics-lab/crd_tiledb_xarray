@@ -1,3 +1,5 @@
 .ipynb_checkpoints/*
 myds/*
 __pycache__
+data/local.zarr
+data/local.tiledb
