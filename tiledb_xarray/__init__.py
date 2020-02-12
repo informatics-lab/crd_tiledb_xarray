@@ -1,10 +1,9 @@
 from xarray import coding, conventions
 from xarray.core import indexing
-# from xarray.core.pycompat import integer_types
 from xarray.core.utils import FrozenDict, HiddenKeyDict
 from xarray.core.variable import Variable
 from xarray.core.utils import NdimSizeLenMixin
-from xarray.backends.common import AbstractDataStore, AbstractWritableDataStore, BackendArray, _encode_variable_name
+from xarray.backends.common import AbstractDataStore
 import os.path
 import json
 
@@ -56,7 +55,6 @@ class LazyTileDB(NdimSizeLenMixin, indexing.ExplicitlyIndexed):
 
     # This needs more thinking about:
     # * Do we want a custom indexer.
-    # * ndim == len(shape)?
     # * optimising and more...
     def __init__(self, arr):
         import tiledb
@@ -66,13 +64,12 @@ class LazyTileDB(NdimSizeLenMixin, indexing.ExplicitlyIndexed):
         self.attr = os.path.basename(arr)
 
         with tiledb.open(arr, 'r') as A:
-            self.shape = tuple(i for _, i in A.nonempty_domain())
+            self.shape = tuple(i+1 for _, i in A.nonempty_domain())
             self.dtype = A.dtype
 
     def __getitem__(self, key):
+        # TODO: need to think more about indexing.
         import tiledb
-        import warnings
-        warnings.warn(f"Not figured out indexin yet! Got {key}")
         if not isinstance(key, indexing.BasicIndexer):
             raise NotImplementedError(f"Only know how to deal with indexing.BasicIndexer got {key}")
         slices = key.tuple
@@ -181,13 +178,6 @@ class TileDBStore(AbstractDataStore):
                 )
         return dimensions
 
-    # def encode_variable(self, variable):
-    #     variable = encode_zarr_variable(variable)
-    #     return variable
-
-    # def encode_attribute(self, a):
-    #     return _encode_zarr_attr_value(a)
-
     def sync(self):
         pass
 
@@ -195,7 +185,7 @@ class TileDBStore(AbstractDataStore):
 def open_tiledb(tiledb_group):
 
     def maybe_decode_store(store, lock=False):
-        # TODO: THINK ON ALL THES OPTIONS. ESPECIALY FILL
+        # TODO: THINK ON ALL THESE OPTIONS. ESPECIALLY FILL
         ds = conventions.decode_cf(
             store
             # mask_and_scale=mask_and_scale,

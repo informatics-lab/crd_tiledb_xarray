@@ -15,11 +15,13 @@ print(store)
 # vars = store.get_variables()
 # print(vars)
 
-ds = open_tiledb("./myds")
-print(ds)
+t_ds = open_tiledb("./myds")
+print(t_ds)
 
 print("/\\ tiledb /\\")
 
 print("\\/ netcdf \\/")
-ds = xr.open_dataset('local.nc')
-print(ds)
+l_ds = xr.open_dataset('local.nc')
+print(l_ds)
+
+print('end')
