@@ -90,6 +90,9 @@ class LazyTileDB(NdimSizeLenMixin, indexing.ExplicitlyIndexed):
 
         with tiledb.open(self._arr, 'r') as A:
 
+            # TODO: bad idea to return in with block. 
+            # TODO: look at dask array from tile db. in tiledb docs.
+
             return A[tuple(bounded_slices)][self.attr]
 
 
@@ -129,7 +132,7 @@ class TileDBStore(AbstractDataStore):
 
     def open_store_variable(self, name, tiledb_array):
         # TODO: What / why was LazilyOuterIndexedArray being used?
-        # data = indexing.LazilyOuterIndexedArray(ZarrArrayWrapper(name, self))
+
         dimensions, attributes = _get_tiledb_dims_and_attrs(tiledb_array, _DIMENSION_KEY)
         attributes = dict(attributes)
         # encoding = {
