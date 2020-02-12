@@ -7,6 +7,8 @@ from xarray.backends.common import AbstractDataStore
 import os.path
 import json
 
+from .hdf5_tiledb_writer import TileDBDataSetBuilder
+
 _DIMENSION_KEY = "DIMENSION_LIST"
 
 

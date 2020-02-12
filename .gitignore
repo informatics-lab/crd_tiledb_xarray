@@ -1,4 +1,5 @@
 .ipynb_checkpoints/*
 myds/*
 __pycache__
-local.zarr
+data/local.zarr
+data/myds

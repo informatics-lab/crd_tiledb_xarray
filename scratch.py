@@ -2,26 +2,19 @@ from tiledb_xarray import TileDBStore, open_tiledb
 import h5py
 import xarray as xr
 
-# ds = xr.open_dataset('local.nc')
-# ds.to_zarr('local.zarr')
+TB_DS = "./data/local.tiledb"
 
-# ds = xr.open_zarr('local.zarr')
-# print(ds)
-
-
-store = TileDBStore.open_group("./myds")
-print(store)
+# store = TileDBStore.open_group(TB_DS)
+# print(store)
 
 # vars = store.get_variables()
 # print(vars)
 
-t_ds = open_tiledb("./myds")
+t_ds = open_tiledb(TB_DS)
 print(t_ds)
 
 print("/\\ tiledb /\\")
-
+print("--------------")
 print("\\/ netcdf \\/")
-l_ds = xr.open_dataset('local.nc')
+l_ds = xr.open_dataset('./data/local.nc')
 print(l_ds)
-
-print('end')
