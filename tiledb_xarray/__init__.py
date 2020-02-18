@@ -7,7 +7,11 @@ from xarray.backends.common import AbstractDataStore
 import os.path
 import json
 
-from .hdf5_tiledb_writer import TileDBDataSetBuilder
+
+from . import hdf5_tiledb_writer
+from . import utils
+from .hdf5_tiledb_writer import HDF5DSEncoder, HDF5AttrsEncoder
+from .utils import get_data_datasets_and_others
 
 _DIMENSION_KEY = "DIMENSION_LIST"
 
@@ -90,7 +94,7 @@ class LazyTileDB(NdimSizeLenMixin, indexing.ExplicitlyIndexed):
 
         with tiledb.open(self._arr, 'r') as A:
 
-            # TODO: bad idea to return in with block. 
+            # TODO: bad idea to return in with block.
             # TODO: look at dask array from tile db. in tiledb docs.
 
             return A[tuple(bounded_slices)][self.attr]

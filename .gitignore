@@ -3,3 +3,5 @@ myds/*
 __pycache__
 data/local.zarr
 data/local.tiledb
+data/multi_phonom
+data/new-tiledb
