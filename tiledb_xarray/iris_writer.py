@@ -90,7 +90,7 @@ class TileDBBuilder():
     def build(self):
         tiledb.group_create(self.root)
 
-        for ds in datasets:
+        for ds in self.datasets:
             group_path = os.path.join(self.root, ds.key)
             tiledb.group_create(group_path)
 
@@ -266,9 +266,10 @@ class TileDBAppender():
         return found_first_index
 
 
+def log(*args):
+    print(datetime.datetime.now(), *args)
+    
 if __name__ == "__main__":
-    def log(*args):
-        print(datetime.datetime.now(), *args)
 
     NC_SOURCE_DIR = "/Users/theo/repos/crd_tiledb_xarray/data/6hrly/"
     files = [os.path.join(NC_SOURCE_DIR, f) for f in sorted(os.listdir(NC_SOURCE_DIR))]
