@@ -126,9 +126,12 @@ class TileDBBuilder():
         domain_indexes = []
         eg_data = next(iter(data.values()))
         for i, i_len in enumerate(eg_data.shape):
+            dom_radius = self._dom_width/2
+            dom_radius = dom_radius - dom_radius % i_len
+            self._dom_width/2
             dim = tiledb.Dim(
                 name=f"dim_{i}",
-                domain=(-self._dom_width/2,  self._dom_width-i_len),
+                domain=(-(dom_radius),  dom_radius),
                 tile=i_len,
                 dtype=np.int64
             )
@@ -266,9 +269,17 @@ class TileDBAppender():
         return found_first_index
 
 
+last_log = None
+
+
 def log(*args):
-    print(datetime.datetime.now(), *args)
-    
+    global last_log
+    now = datetime.datetime.now()
+    diff = "+% 5.0fs" % (now - last_log).total_seconds() if last_log else "       "
+    last_log = now
+    print(diff, datetime.datetime.now(), *args)
+
+
 if __name__ == "__main__":
 
     NC_SOURCE_DIR = "/Users/theo/repos/crd_tiledb_xarray/data/6hrly/"
