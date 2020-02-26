@@ -4,6 +4,21 @@ import h5py
 import json
 import numpy as np
 import tiledb
+import re
+
+from .misc import DIMENSION_KEY
+
+
+def get_tiledb_name(ds):
+    attrs = ['cell_methods', 'um_stash_source']
+    name_items = [ds.name.encode('utf-8')]
+    name_items += [ds.attrs.get(attr, b'') for attr in attrs]
+    coords = ds.attrs.get('coordinates', b'').decode()
+    if coords.find('pressure') >= 0:
+        name_items += [b"at-pressure"]
+    if coords.find('height') >= 0:
+        name_items += [b"at-height"]
+    return re.sub("[^-A-z0-9_]", "", b'__'.join(name_items).decode().replace(' ', '-'))
 
 
 class HDF5AttrsEncoder(json.JSONEncoder):
@@ -88,16 +103,17 @@ class TileDBDataSetBuilder():
             json.dump({k: v for k, v in group.attrs.items()}, fp, default=HDF5AttrsEncoder(self.file).default)
         print(f'wrote group attrs for {group_name}')
 
-    def __get_path(self, group, ds_name):
-        location = os.path.join(self.root, ds_name)
+    def __get_path(self, group, ds):
+        tiledb_name = get_tiledb_name(ds)
+        location = os.path.join(self.root, tiledb_name)
 
         if group and group is not "/":
-            location = os.path.join(self.root, group, ds_name)
+            location = os.path.join(self.root, group, tiledb_name)
         return location
 
     def create_scaler(self, group, ds_name, ds):
         # TODO: this is doggy!
-        location = self.__get_path(group, ds_name)
+        location = self.__get_path(group, ds)
         os.mkdir(location)
         with open(os.path.join(location, "value"), 'w') as fp:
             val = ds[()]
@@ -107,12 +123,30 @@ class TileDBDataSetBuilder():
             json.dump({k: v for k, v in ds.attrs.items()}, fp,
                       default=HDF5AttrsEncoder(self.file).default)
 
+    # def __chunk_suggest(self, dtype, shape, target_size_MB=50):
+    #     digit_size = {
+    #         "float32": 32/4,
+    #         "float64": 63/4,
+    #         "int16": 16/4,
+    #         "int32": 32/4,
+    #         "int8": 8/4,
+    #     }[dtype.name]
+
+    #     size_bytes_MB = digit_size * np.prod(shape)/ (1000*1000)
+    #     number_splits = round(size_bytes_MB / target_size_MB)
+
+    #     if number_splits < 2:
+    #         return shape
+
     def create_array(self, group, ds_name, ds):
-        location = self.__get_path(group, ds_name)
+        location = self.__get_path(group, ds)
         os.mkdir(location)
 
+        dom_width = np.iinfo(np.int64).max
+        dom_width = dom_width if dom_width % 2 == 0 else dom_width - 1
+
         tile = 100
-        domain_indexs = [tiledb.Dim(name=f"d{i}", domain=(0,  np.iinfo(np.uint64).max-tile), tile=tile, dtype=np.uint64) for i in range(len(ds.shape))]
+        domain_indexs = [tiledb.Dim(name=f"d{i}", domain=(-dom_width/2,  dom_width-tile), tile=tile, dtype=np.int64) for i in range(len(ds.shape))]
 
         data_type = {
             "float32": np.float32,
@@ -150,3 +184,94 @@ class TileDBDataSetBuilder():
 
     def close(self):
         self.file.close()
+
+
+def extend_dim(arr_path, ds_to_insert, guess_indexes=False, from_indexes=None, at_indexes=None):
+    if guess_indexes or at_indexes:
+        raise NotImplementedError('from_index and guess_indexes not implemented yet')
+
+    assert len(ds_to_insert.shape) == len(from_indexes)
+
+    # TODO check meta data - at lest units?
+    selection = tuple(
+        slice(i, i+length, None) for i, length in zip(from_indexes, ds_to_insert.shape)
+    )
+    with tiledb.open(arr_path, 'w') as A:
+        A[selection] = ds_to_insert[()]
+
+
+def _get_indexes_of_values(ds, tiledb_array):
+    print(f"get vals {ds[()]} from {tiledb_array}")
+    assert len(ds.shape) == 1, f"Can only process 1D datasets here. Shape is {ds.shape} for {ds}"
+
+    try:
+        ds_units = ds.attrs['units'].tostring().decode()
+    except (KeyError, UnicodeDecodeError, AttributeError):
+        raise ValueError("Could not access units of dataset {ds} does not have units. not safe...")
+    with tiledb.open(tiledb_array, 'r') as A:
+        try:
+            tiledb_units = json.loads(A.meta['units'])
+        except (KeyError, json.decoder.JSONDecodeError):
+            raise ValueError("Could not access units of tiledb {tiledb_array} does not have units. not safe...")
+
+        if not ds_units == tiledb_units:
+            raise ValueError("Could not access units of tiledb {tiledb_array} does not have units. not safe...")
+
+        start, stop = A.nonempty_domain()[0]
+        found_first_index = None
+        cur = start
+        step = 3000
+        find = ds[()]
+        ds_name = ds.name.split('/')[-1]
+        while cur <= stop:
+            cur_stop = cur+step if cur+step <= stop else stop
+            search = A[(slice(cur, cur+step, None),)]
+
+            # Shouldn't need to do this each loop but can't find how to get info from schema about what attr names are.
+            if len(search.keys()) == 1:
+                tiledb_key = next(iter(search))
+            elif ds_name in search.keys():
+                tiledb_key = ds_name
+            else:
+                raise RuntimeError(f'Dont know which bit of data should work with for {ds} in tiledb attrs {search.keys()})')
+
+            search_arr = search[tiledb_key]
+            found_first_item = np.where(search_arr == find[0])[0]
+            if len(found_first_item) >= 1:
+                # TODO: what about multiple finds.
+                print(f'found at {found_first_item[0]} at offset {cur}')
+                found_first_index = found_first_item[0] + cur
+                break
+            else:
+                print(f"not found at offset {cur}:{cur+step}")
+
+        if found_first_index is None:
+            raise ValueError("Could not find the data {find[0:10]}... in {tiledb_array}")
+
+        test_slice = slice(found_first_index, found_first_index + len(find))
+        test_data = A[(test_slice,)][tiledb_key]
+
+        if not (test_data == find).all():
+            raise ValueError("could not find the data. Found first item but following items didn't match")
+
+    print('done get index')
+    return test_slice
+
+
+def insert_dataset(ds, tiledb_root):
+    index_slices = []
+    for dim in ds.attrs[DIMENSION_KEY]:
+        if len(dim) != 1:
+            raise ValueError(f"Can only work with data sets with 1d dims. Got:{ds.attrs['_DIMENSION_KEY']}")
+        dim = dim[0]
+        dim_ds = ds.file[dim]
+
+        print('Should check units... on dime but not going to...', dim_ds.attrs.get('units', None))
+
+        dim_tiledb_arr = os.path.join(tiledb_root, get_tiledb_name(dim_ds))
+        index_slices.append(_get_indexes_of_values(dim_ds, dim_tiledb_arr))
+    print(index_slices)
+
+    tiledb_arr = os.path.join(tiledb_root, get_tiledb_name(ds))
+    with tiledb.open(tiledb_arr, 'w') as A:
+        A[tuple(index_slices)] = ds[()]

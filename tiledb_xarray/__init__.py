@@ -1,3 +1,4 @@
+from .hdf5_tiledb_writer import TileDBDataSetBuilder
 from xarray import coding, conventions
 from xarray.core import indexing
 from xarray.core.utils import FrozenDict, HiddenKeyDict
@@ -7,9 +8,7 @@ from xarray.backends.common import AbstractDataStore
 import os.path
 import json
 
-from .hdf5_tiledb_writer import TileDBDataSetBuilder
-
-_DIMENSION_KEY = "DIMENSION_LIST"
+from .misc import DIMENSION_KEY
 
 
 def _get_tiledb_dims_and_attrs(tilebd_obj, dimension_key):
@@ -90,7 +89,7 @@ class LazyTileDB(NdimSizeLenMixin, indexing.ExplicitlyIndexed):
 
         with tiledb.open(self._arr, 'r') as A:
 
-            # TODO: bad idea to return in with block. 
+            # TODO: bad idea to return in with block.
             # TODO: look at dask array from tile db. in tiledb docs.
 
             return A[tuple(bounded_slices)][self.attr]
@@ -133,7 +132,7 @@ class TileDBStore(AbstractDataStore):
     def open_store_variable(self, name, tiledb_array):
         # TODO: What / why was LazilyOuterIndexedArray being used?
 
-        dimensions, attributes = _get_tiledb_dims_and_attrs(tiledb_array, _DIMENSION_KEY)
+        dimensions, attributes = _get_tiledb_dims_and_attrs(tiledb_array, DIMENSION_KEY)
         attributes = dict(attributes)
         # encoding = {
         #     "chunks": zarr_array.chunks,
@@ -167,7 +166,7 @@ class TileDBStore(AbstractDataStore):
         dimensions = {}
         for k, v in self.ds.arrays():
             try:
-                for d, s in zip(v.attrs[_DIMENSION_KEY], v.shape):
+                for d, s in zip(v.attrs[DIMENSION_KEY], v.shape):
                     if d in dimensions and dimensions[d] != s:
                         raise ValueError(
                             "found conflicting lengths for dimension %s "
@@ -179,7 +178,7 @@ class TileDBStore(AbstractDataStore):
                 raise KeyError(
                     "TileDB object is missing the attribute `%s`, "
                     "which is required for xarray to determine "
-                    "variable dimensions." % (_DIMENSION_KEY)
+                    "variable dimensions." % (DIMENSION_KEY)
                 )
         return dimensions
 
