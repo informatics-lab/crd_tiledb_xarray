@@ -114,6 +114,7 @@ class TileDBBuilder():
 
         all_attrs['dimensions'] = [coord.name() for coord in ds.domain.coords]
 
+        log(f"insert into {path.split('/')[-2]} shape {c.shape}")
         self.create_array(path, data, all_attrs)
 
     def create_coord_array(self, group, coord):
@@ -214,6 +215,7 @@ class TileDBAppender():
     def _insert(self):
         data = {stash(c): c.data for c in self.dataset.cubes}
         data_shape = next(iter(data.values())).shape
+        log(f"insert into {self.root.split('/')[-1]} shape {data_shape}")
         selection = tuple(
             slice(offset, offset + data_shape[i]) for i, offset in enumerate(self.offsets)
         )
@@ -264,49 +266,46 @@ class TileDBAppender():
         return found_first_index
 
 
-def log(*args):
-    print(datetime.datetime.now(), *args)
+if __name__ == "__main__":
+    def log(*args):
+        print(datetime.datetime.now(), *args)
 
+    NC_SOURCE_DIR = "/Users/theo/repos/crd_tiledb_xarray/data/6hrly/"
+    files = [os.path.join(NC_SOURCE_DIR, f) for f in sorted(os.listdir(NC_SOURCE_DIR))]
+    # part1_files, part2_files = files[:1], files[1:]
+    # file_groups = [files[i:i+2] for i in range(0, len(files), 2)]
 
-NC_SOURCE_DIR = "/Users/theo/repos/crd_tiledb_xarray/data/6hrly/"
-files = [os.path.join(NC_SOURCE_DIR, f) for f in sorted(os.listdir(NC_SOURCE_DIR))]
-part1_files, part2_files = files[:1], files[1:]
+    TILEDB_PATH = '/Users/theo/repos/crd_tiledb_xarray/data/tmp.tiledb'
+    shutil.rmtree(TILEDB_PATH, ignore_errors=True)
 
-TILEDB_PATH = '/Users/theo/repos/crd_tiledb_xarray/data/tmp.tiledb'
-shutil.rmtree(TILEDB_PATH, ignore_errors=True)
-
-
-files, last_file = files[:-1], files[-1]
-log('load in iris')
-cubes = iris.load(part1_files)
-log('sort into domains')
-datasets = cubes_into_datasets(cubes)
-log('Build tiledb')
-builder = TileDBBuilder(datasets, TILEDB_PATH)
-builder.build()
-log('Built')
-
-
-#  Extend in time....
-log('expand times')
-time_arrs = glob.glob(TILEDB_PATH+'/**/time')
-for arr in time_arrs:
-    linear_arr_extend(arr, 1000)
-    log('Done', os.path.basename(arr))
-
-
-# Append the rest
-# for file in part2_files:
-log('load rest of the cubes ')
-for i, file in enumerate(part2_files):
-    log(f"add file {i}")
-    cubes = iris.load(part2_files)
+    log('load in iris')
+    first_file = files.pop(0)
+    cubes = iris.load(first_file)
+    log('sort into domains')
     datasets = cubes_into_datasets(cubes)
-    for dataset in datasets:
-        log(f'   add ds {dataset.key}')
+    log('Build tiledb')
+    builder = TileDBBuilder(datasets, TILEDB_PATH)
+    builder.build()
+    log('Built')
 
-        appender = TileDBAppender(dataset, TILEDB_PATH)
-        appender.build()
+    #  Extend in time....
+    log('expand times')
+    time_arrs = glob.glob(TILEDB_PATH+'/**/time')
+    for arr in time_arrs:
+        linear_arr_extend(arr, 1000)
+        log('Done', os.path.basename(arr))
 
+    # Append the rest
+    # for file in part2_files:
+    log('load rest of the cubes ')
+    for i, file in enumerate(files):
+        log(f"add file {i}")
+        cubes = iris.load(file)
+        datasets = cubes_into_datasets(cubes)
+        for dataset in datasets:
+            log(f'   add ds {dataset.key}')
 
-log("Fin")
+            appender = TileDBAppender(dataset, TILEDB_PATH)
+            appender.build()
+
+    log("Fin")
